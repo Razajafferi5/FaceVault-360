@@ -1,0 +1,186 @@
+@import "tailwindcss";
+
+/* FaceVault 360 Theme Variables */
+:root {
+  --fv-bg-primary: #0a0f1d;
+  --fv-bg-secondary: #111827;
+  --fv-bg-card: #1e293b;
+  --fv-border: #334155;
+  --fv-text-primary: #f8fafc;
+  --fv-text-secondary: #94a3b8;
+  --fv-accent: #3b82f6;
+  --fv-cyan: #06b6d4;
+  --fv-success: #22c55e;
+  --fv-warning: #f59e0b;
+  --fv-danger: #ef4444;
+}
+
+body {
+  background-color: var(--fv-bg-primary);
+  color: var(--fv-text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #0a0f1d; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* Keyframe Animations */
+@keyframes laser-sweep {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.9; }
+  100% { transform: translateY(220%); opacity: 0; }
+}
+
+@keyframes radar-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.96); }
+}
+
+@keyframes scan-horizontal {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes ripple {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes mesh-grid {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 40px; }
+}
+
+@keyframes biometric-glow {
+  0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.3), inset 0 0 15px rgba(6, 182, 212, 0.2); }
+  50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.6), inset 0 0 25px rgba(6, 182, 212, 0.4); }
+}
+
+/* Animation Utility Classes */
+.animate-laser {
+  animation: laser-sweep 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-radar {
+  animation: radar-spin 4s linear infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-scan-line {
+  animation: scan-horizontal 3s ease-in-out infinite;
+}
+
+.animate-ripple {
+  animation: ripple 2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+.animate-float {
+  animation: float-slow 3s ease-in-out infinite;
+}
+
+.animate-biometric {
+  animation: biometric-glow 2.5s ease-in-out infinite;
+}
+
+/* Biometric HUD Grid Pattern */
+.bg-cyber-grid {
+  background-size: 30px 30px;
+  background-image: 
+    linear-gradient(to right, rgba(51, 65, 85, 0.15) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(51, 65, 85, 0.15) 1px, transparent 1px);
+}
+
+.glow-blue {
+  box-shadow: 0 0 20px -5px rgba(59, 130, 246, 0.5);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px -5px rgba(6, 182, 212, 0.5);
+}
+
+.glow-green {
+  box-shadow: 0 0 20px -5px rgba(34, 197, 94, 0.5);
+}
+
+/* Authentication Page Animations */
+@keyframes auth-float-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, -40px) scale(1.1); }
+}
+
+@keyframes auth-float-2 {
+  0%, 100% { transform: translate(0, 0) scale(1.05); }
+  50% { transform: translate(-40px, 30px) scale(0.95); }
+}
+
+@keyframes auth-float-3 {
+  0%, 100% { transform: translate(0, 0) scale(0.95); }
+  50% { transform: translate(25px, 25px) scale(1.08); }
+}
+
+@keyframes error-shake {
+  0%, 100% { transform: translateX(0); }
+  15%, 45%, 75% { transform: translateX(-8px); }
+  30%, 60%, 90% { transform: translateX(8px); }
+}
+
+@keyframes card-entrance {
+  0% { opacity: 0; transform: translateY(20px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes beam-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-auth-orb-1 {
+  animation: auth-float-1 12s ease-in-out infinite;
+}
+
+.animate-auth-orb-2 {
+  animation: auth-float-2 15s ease-in-out infinite;
+}
+
+.animate-auth-orb-3 {
+  animation: auth-float-3 10s ease-in-out infinite;
+}
+
+.animate-error-shake {
+  animation: error-shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.animate-card-entrance {
+  animation: card-entrance 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-beam {
+  animation: beam-rotate 8s linear infinite;
+}
+
+/* Respect Accessibility Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

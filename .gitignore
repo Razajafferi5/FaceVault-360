@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build outputs
+frontend/dist/
+frontend/dist-ssr/
+
+# Logs
+*.log
+logs/
+
+# Insightface models cache (downloaded dynamically)
+backend/models/
+backend/app/models/buffalo_sc/
+backend/buffalo_sc/
+*.onnx
+*.db
+*.db-shm
+*.db-wal
+backend/data/
