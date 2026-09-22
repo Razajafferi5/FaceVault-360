@@ -182,7 +182,7 @@ export const Attendance: React.FC = () => {
   useEffect(() => {
     loadRecords(false);
 
-    // Auto-poll records if viewing today's records (every 5 seconds, visibility-aware)
+    // Auto-poll records if viewing today's records (every 3 seconds, visibility-aware)
     let timer: NodeJS.Timeout | null = null;
     if (isToday) {
       timer = setInterval(() => {
@@ -190,8 +190,9 @@ export const Attendance: React.FC = () => {
           return;
         }
         loadRecords(true);
-      }, 5000);
+      }, 3000);
     }
+
 
     return () => {
       if (timer) clearInterval(timer);

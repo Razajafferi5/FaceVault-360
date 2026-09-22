@@ -106,6 +106,8 @@ class RTSPCameraWorker:
         self.reconnect_attempt: int = 0
         self.manual_disconnected: bool = False
         self._reconnect_trigger = threading.Event()
+        self._stop_event = threading.Event()  # Signals grabber to exit immediately
+
         self.last_error_details: Dict[str, Any] = {}
 
         # Granular Performance Metrics Tracking
@@ -325,15 +327,20 @@ class RTSPCameraWorker:
         self.running = False
         self.status = "disconnected"
         self.status_message = "Worker stopped"
+        # Signal _stop_event FIRST so inner frame-read loop exits immediately
+        self._stop_event.set()
+        # Then wake up any sleeping backoff wait
         self._reconnect_trigger.set()
 
+        # Grabber thread may be sleeping up to 3.5s in backoff — give it 5s to fully exit
         if self._grabber_thread and self._grabber_thread.is_alive():
-            self._grabber_thread.join(timeout=2.0)
+            self._grabber_thread.join(timeout=5.0)
         if self._processor_thread and self._processor_thread.is_alive():
             self._processor_thread.join(timeout=2.0)
         self._recog_executor.shutdown(wait=False, cancel_futures=True)
 
         logger.info(f"Stopped RTSP Worker for Camera {self.camera_id} ('{self.name}')")
+
 
     def manual_disconnect(self):
         """Manually disconnect and stop reconnection loop."""
@@ -492,7 +499,8 @@ class RTSPCameraWorker:
                 first_frame = True
                 consecutive_read_failures = 0
                 MAX_READ_FAILURES = 12  # Fast failure detection (~480ms)
-                while self.running and not self.manual_disconnected:
+                while self.running and not self.manual_disconnected and not self._stop_event.is_set():
+
                     ret, frame = cap.read()
                     if not ret or frame is None or frame.size == 0:
                         consecutive_read_failures += 1
@@ -895,10 +903,14 @@ class RTSPCameraWorker:
         """
         Dispatches attendance recording to database asynchronously.
         Never blocks the video grabber or display thread!
+
+        CRITICAL FIX: Uses a 4.0s timeout (was 0.35s) so concurrent SQLite WAL
+        commits have sufficient time. On timeout, schedules a background retry.
+        NEVER returns a green confirmed badge unless the DB write actually succeeded.
         """
         action_time_str = datetime.now().strftime("%I:%M %p")
 
-        async def _db_task():
+        async def _db_task() -> str:
             async with AsyncSessionLocal() as session:
                 try:
                     record, is_new, action_name = await AttendanceRepository.process_rtsp_attendance(
@@ -909,25 +921,52 @@ class RTSPCameraWorker:
                         camera_name=self.name,
                         camera_mode=self.mode
                     )
+                    logger.info(
+                        f"RTSP Attendance DB confirmed: {employee_name} (ID {employee_id}) -> {action_name}"
+                    )
                     return action_name
                 except Exception as err:
-                    logger.error(f"Failed to record RTSP attendance in DB: {err}", exc_info=True)
+                    logger.error(
+                        f"RTSP Attendance DB write FAILED for {employee_name} (ID {employee_id}): {err}",
+                        exc_info=True
+                    )
                     return "ATTENDANCE FAILED"
+
+        async def _retry_db_task() -> None:
+            """Background retry — runs if the primary 4s attempt timed out."""
+            await asyncio.sleep(2.0)
+            result = await _db_task()
+            logger.info(f"RTSP Attendance background retry for {employee_name}: {result}")
 
         try:
             if self.loop and self.loop.is_running():
                 future = asyncio.run_coroutine_threadsafe(_db_task(), self.loop)
-                # Short non-blocking timeout: if DB responds fast, use real action name
                 try:
-                    action_name = future.result(timeout=0.35)
+                    # 4.0s timeout — covers typical SQLite WAL commit under concurrent load
+                    # (was 0.35s which silently failed for employees recognized simultaneously)
+                    action_name = future.result(timeout=4.0)
                 except Exception:
-                    # If DB is busy, coroutine continues in background, return optimistic action
-                    action_name = "CHECK-IN SUCCESSFUL" if self.mode == "CHECK-IN" else "CHECK-OUT SUCCESSFUL"
+                    # Timed out or errored — schedule a background retry and show pending badge
+                    logger.warning(
+                        f"RTSP Attendance DB write timed out for {employee_name} (ID {employee_id}). "
+                        f"Scheduling background retry in 2s."
+                    )
+                    try:
+                        asyncio.run_coroutine_threadsafe(_retry_db_task(), self.loop)
+                    except Exception as sched_err:
+                        logger.error(f"Could not schedule attendance retry: {sched_err}")
+                    # Return amber PENDING badge — NOT a false green success
+                    pending_badge = "... RECORDING ATTENDANCE"
+                    return pending_badge, action_time_str, (0, 165, 255), "Attendance Pending..."
             else:
                 action_name = asyncio.run(_db_task())
 
-            # Format clean HUD action badge and colors
-            if action_name == "NO_CHECK_IN_FOUND":
+            # Format HUD action badge and badge color based on actual confirmed DB result
+            if action_name == "ATTENDANCE FAILED":
+                badge = "✗ ATTENDANCE FAILED"
+                checkout_status = "Attendance DB Error"
+                badge_color = (0, 0, 200)  # Red — visible error
+            elif action_name == "NO_CHECK_IN_FOUND":
                 badge = "⚠ NO CHECK-IN FOUND"
                 checkout_status = "No Check-In Found"
                 badge_color = (0, 165, 255)  # Amber warning
@@ -957,10 +996,13 @@ class RTSPCameraWorker:
                 badge_color = (0, 220, 0)
 
             return badge, action_time_str, badge_color, checkout_status
+
         except Exception as e:
-            logger.error(f"Could not execute attendance DB task: {e}")
-            fallback_badge = f"✓ CHECK-IN ({action_time_str})" if self.mode == "CHECK-IN" else f"✓ CHECK-OUT ({action_time_str})"
-            return fallback_badge, action_time_str, (0, 220, 0), "Recorded"
+            logger.error(f"Could not execute attendance DB task for {employee_name}: {e}", exc_info=True)
+            # Return explicit red error badge — NEVER a fake green success
+            return "✗ ATTENDANCE ERROR", action_time_str, (0, 0, 200), "Attendance Error"
+
+
 
     def _trigger_denied_event_async(self, similarity: float, camera_name: str):
         """Asynchronously records an unauthorized/unknown face attempt to access_events table."""
@@ -1496,7 +1538,15 @@ class RTSPManager:
         """Start or restart a camera worker."""
         with self._lock:
             if camera_id in self.workers:
-                self.workers[camera_id].stop()
+                old_worker = self.workers[camera_id]
+                old_worker.stop()
+                # Wait for the grabber thread to fully exit and release the RTSP TCP socket
+                # before starting the new worker — prevents slow reconnect race condition
+                if old_worker._grabber_thread and old_worker._grabber_thread.is_alive():
+                    logger.debug(f"Waiting for old grabber thread to exit on Camera {camera_id}...")
+                    old_worker._grabber_thread.join(timeout=5.0)
+                    if old_worker._grabber_thread.is_alive():
+                        logger.warning(f"Old grabber thread for Camera {camera_id} did not exit in time — proceeding anyway")
 
             worker = RTSPCameraWorker(
                 camera_id=camera_id,
